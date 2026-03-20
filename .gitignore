@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Tauri and Rust build artifacts
+src-tauri/target/
+src-tauri/gen/
+compile_err.txt
+*.ps1
