@@ -40,3 +40,14 @@ jobs:
           releaseBody: '本版本由 GitHub Actions 自动化构建，请在 Assets 处下载最终独立版 .exe 运行。'
           releaseDraft: false
           prerelease: false
+
+      - name: Upload Standalone Executable
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "app-v$version"
+          $exePath = "src-tauri\target\release\office2pdf.exe"
+          $newName = "office2pdf_$version`_standalone.exe"
+          Copy-Item $exePath $newName
+          gh release upload $tag $newName --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
