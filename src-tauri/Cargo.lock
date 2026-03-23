@@ -2309,6 +2309,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "office2pdf"
+version = "0.1.0"
+dependencies = [
+ "rfd",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2684,18 +2696,6 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
-
-[[package]]
-name = "ppt2pdf-tauri"
-version = "0.1.0"
-dependencies = [
- "rfd",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
-]
 
 [[package]]
 name = "ppv-lite86"

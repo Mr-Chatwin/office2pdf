@@ -82,17 +82,21 @@
             }
         });
 
+        // 强行阻止 HTML 默认的拖拽拦截，让 Tauri 事件生效
+        document.addEventListener('dragover', e => e.preventDefault());
+        document.addEventListener('drop', e => e.preventDefault());
+
         // 监听 Tauri 提供的拖拽事件
-        window.__TAURI__.event.listen('tauri://drop', (event) => {
+        window.__TAURI__.event.listen('tauri://drag-drop', (event) => {
             if (isConverting) return;
             const paths = event.payload.paths || event.payload; // 兼容不同版本的 payload 结构
             if (!Array.isArray(paths)) return;
             
-            const pptPaths = paths.filter(p => /\.(pptx?|ppsx?|pps)$/i.test(p));
-            if (pptPaths.length > 0) {
-                addFilesToQueue(pptPaths);
+            const validPaths = paths.filter(p => /\.(pptx?|ppsx?|pps|docx?|doc|xlsx?|xls|csv)$/i.test(p));
+            if (validPaths.length > 0) {
+                addFilesToQueue(validPaths);
             } else {
-                showToast('请拖入有效的 PPT 文件', 'error');
+                showToast('请拖入有效的 Office(Word/Excel/PPT) 文件', 'error');
             }
             dropZone.classList.remove('drag-over');
         });
@@ -187,8 +191,12 @@
                 actionsHtml = `<button class="btn btn-sm btn-ghost btn-danger" onclick="removeQueueItem(${i})">移除</button>`;
             }
 
+            const isWord = /\.(docx?|doc)$/i.test(item.name);
+            const isExcel = /\.(xlsx?|xls|csv)$/i.test(item.name);
+            const icon = isWord ? '📝' : (isExcel ? '📗' : '📊');
+
             div.innerHTML = `
-                <div class="file-item-icon">📊</div>
+                <div class="file-item-icon">${icon}</div>
                 <div class="file-item-info">
                     <div class="file-item-name">${escapeHtml(item.name)}</div>
                     <div class="file-item-status ${statusClass}">${statusHtml}</div>
@@ -247,47 +255,52 @@
         
         updateConvertButtons();
 
+        // 将要处理的全部标记为状态转换中
+        pendingItems.forEach(item => { item.status = 'converting'; });
+        renderQueue();
+
         let successCount = 0;
         let failCount = 0;
+        const paths = pendingItems.map(item => item.path);
 
-        for (let i = 0; i < conversionQueue.length; i++) {
-            if (stopRequested) {
-                conversionQueue.filter(item => item.status === 'pending').forEach(item => item.status = 'stopped');
-                break;
-            }
-
-            const item = conversionQueue[i];
-            if (item.status !== 'pending') continue;
-
-            item.status = 'converting';
-            renderQueue();
-
-            try {
-                // invoke returns the path to the PDF on success
-                const pdfPath = await invoke('convert_pptx', { path: item.path });
-                item.status = 'success';
-                item.result = pdfPath;
-                successCount++;
-            } catch (err) {
-                item.status = 'error';
-                item.error = typeof err === 'string' ? err : err.message || JSON.stringify(err);
-                failCount++;
-            }
-            renderQueue();
+        try {
+            // 一次性将全部路径推入底层分发器
+            const results = await invoke('convert_batch', { paths });
+            
+            results.forEach(res => {
+                const item = conversionQueue.find(i => i.path === res.path);
+                if (item) {
+                    if (res.success) {
+                        item.status = 'success';
+                        item.result = res.pdf_path;
+                        successCount++;
+                    } else {
+                        item.status = 'error';
+                        item.error = res.error_msg || '未知错误';
+                        failCount++;
+                    }
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            const errMsg = typeof err === 'string' ? err : (err.message || JSON.stringify(err));
+            pendingItems.forEach(item => {
+                if (item.status === 'converting') {
+                    item.status = 'error';
+                    item.error = errMsg;
+                    failCount++;
+                }
+            });
         }
 
         isConverting = false;
         if (engineSelect) engineSelect.disabled = false;
         updateConvertButtons();
+        renderQueue();
 
         const resultsTitle = document.getElementById('resultsTitle');
-        if (stopRequested) {
-            resultsTitle.textContent = `转换已终止 (成功: ${successCount}, 失败: ${failCount})`;
-            showToast('转换已被用户终止', 'info');
-        } else {
-            resultsTitle.textContent = `转换完成 — ${successCount} 个成功${failCount > 0 ? `，${failCount} 个失败` : ''}`;
-            showToast(`完成！${successCount} 个文件已转换`, successCount > 0 ? 'success' : 'error');
-        }
+        resultsTitle.textContent = `转换完成 — ${successCount} 个成功${failCount > 0 ? `，${failCount} 个失败` : ''}`;
+        showToast(`完成！${successCount} 个文件通过批处理引擎完成极速转换`, successCount > 0 ? 'success' : 'error');
     }
 
     // --- 工具函数 ---
